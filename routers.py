@@ -38,7 +38,7 @@ def update_fighter(fighter_id: int, fighter: FighterUpdate) -> FighterModel:
         )
 
     return updated_fighter
-      
+
 
 @router.delete("/{fighter_id}")
 def delete_fighter(fighter_id: int) -> FighterModel:
@@ -51,5 +51,3 @@ def delete_fighter(fighter_id: int) -> FighterModel:
         )
 
     return fighter
-
-
