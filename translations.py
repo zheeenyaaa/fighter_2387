@@ -9,9 +9,9 @@ TRANSLATIONS = {
         "deleted": "Fighter deleted", "not_found": "Fighter not found",
         "self": "Get", "create": "Create", "update": "Update", "delete": "Delete",
     },
-    "fr": {
-        "created": "Avion de chasse créé", "updated": "Avion de chasse mis à jour",
-        "deleted": "Avion de chasse supprimé", "not_found": "Avion de chasse introuvable",
-        "self": "Consulter", "create": "Créer", "update": "Modifier", "delete": "Supprimer",
+    "es": {
+        "created": "Caza creado", "updated": "Caza actualizado",
+        "deleted": "Caza eliminado", "not_found": "Caza no encontrado",
+        "self": "Obtener", "create": "Crear", "update": "Modificar", "delete": "Eliminar",
     },
 }

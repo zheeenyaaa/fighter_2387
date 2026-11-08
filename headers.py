@@ -3,7 +3,7 @@ from fastapi import Header
 from translations import TRANSLATIONS
 
 
-# Возможные значения "ru", "en", "fr", "en-US", "fr-FR", "en;q=0.5, fr;q=0.9"
+# Возможные значения "ru", "en", "es", "en-US", "es-ES", "en;q=0.5, es;q=0.9"
 def get_language(
     accept_language: Annotated[str | None, Header(alias="Accept-Language")] = None,
 ) -> str:
