@@ -21,3 +21,17 @@ class FighterModel(FighterInput):
 
 class FighterUpdate(FighterInput):
    pass
+
+
+class ResourceLink(BaseModel):
+    href: str
+    method: str
+    title: str
+
+
+class FighterResource(FighterModel):
+    links: dict[str, ResourceLink]
+
+
+class FighterMutation(FighterModel):
+    message: str
