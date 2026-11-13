@@ -2,11 +2,11 @@
 
 REST API для каталога истребителей на Python и FastAPI. Приложение позволяет создавать записи, получать весь каталог или отдельный истребитель, обновлять его характеристики и удалять записи.
 
-Данные хранятся в памяти процесса. При каждом запуске загружаются три начальные записи: `1` — F-16 Fighting Falcon, `2` — F-15 Eagle, `3` — F/A-18A Hornet. Изменения теряются после остановки или перезагрузки сервера, в том числе при автоматической перезагрузке с `--reload`.
+Данные хранятся в PostgreSQL. При запуске API создаёт таблицу `fighters`, если она отсутствует. Записи сохраняются после перезапуска приложения. [Как проверить запись в PostgreSQL](#проверка-записи-в-postgresql).
 
 ## Запуск API без Docker
 
-Нужны Python 3.11 или новее и `pip`. Зависимости зафиксированы в `requirements.txt`. Этот способ запускает только API; для Prometheus и Grafana используйте Docker Compose ниже. Оба способа используют порт `8000`, поэтому запускайте один из них.
+Нужны Python 3.11 или новее, `pip` и запущенный PostgreSQL. Зависимости перечислены в `requirements.txt`. Если PostgreSQL запущен через Compose, а API запускается на ноутбуке, задайте `DB_HOST=127.0.0.1` в окружении процесса API. Остальные параметры подключения берутся из файла выбранного профиля. Локальный API и контейнер API используют порт `8000`, поэтому запускайте один из них.
 
 Все команды выполняйте из папки проекта, где находится `main.py`. Если окружение `venv` уже создано, шаг его создания можно пропустить. Активация окружения для приведённых команд не требуется.
 
@@ -23,6 +23,8 @@ py -m venv venv
 Запустите сервер:
 
 ```powershell
+$env:ENVIRONMENT = "dev"
+$env:DB_HOST = "127.0.0.1"
 .\venv\Scripts\python.exe -m uvicorn main:app --reload
 ```
 
@@ -32,7 +34,7 @@ py -m venv venv
 cd "путь/к/fighter_2387"
 python3 -m venv venv
 ./venv/bin/python -m pip install -r requirements.txt
-./venv/bin/python -m uvicorn main:app --reload
+ENVIRONMENT=dev DB_HOST=127.0.0.1 ./venv/bin/python -m uvicorn main:app --reload
 ```
 
 После запуска:
@@ -45,7 +47,7 @@ python3 -m venv venv
 
 Для остановки сервера нажмите `Ctrl+C` в его терминале.
 
-## Запуск API, Prometheus и Grafana через Docker Compose
+## Запуск API, PostgreSQL, Prometheus и Grafana через Docker Compose
 
 Локальная конфигурация основана на [simple-monitoring](https://github.com/ivanovsdesign/simple-monitoring) и настроена только для этого FastAPI приложения. Нужен запущенный Docker Engine; создавать Python-окружение для этого способа не требуется. Из папки проекта выполните:
 
@@ -53,11 +55,41 @@ python3 -m venv venv
 docker compose up -d --build
 ```
 
-Стек поднимет приложение на `http://localhost:8000`, Prometheus на `http://localhost:9090` и Grafana на `http://localhost:3000`. Все порты доступны только с этого компьютера. Используются Python 3.13.18, Prometheus 3.16.0 и Grafana 13.3.0. При первом входе в Grafana используйте `admin` / `admin` и задайте свой пароль; далее входите с новым паролем. Источник данных Prometheus и дашборд **Services / Fighter API** загружаются автоматически. Дашборд показывает доступность сбора, частоту запросов и частоту ошибок 5xx. Для появления точек на графике несколько раз откройте `/health` или `/api/v1/fighters/`, затем подождите 15–30 секунд. [Пример скриншота дашборда](monitoring/grafana-dashboard.jpg).
+Стек поднимет приложение на `http://localhost:8000`, PostgreSQL на порту `5432`, Prometheus на `http://localhost:9090` и Grafana на `http://localhost:3000`. Используются Python 3.13.18, Prometheus 3.16.0 и Grafana 13.3.0. При первом входе в Grafana используйте `admin` / `admin` и задайте свой пароль; далее входите с новым паролем. Источник данных Prometheus и дашборд **Services / Fighter API** загружаются автоматически. Дашборд показывает доступность сбора, частоту запросов и частоту ошибок 5xx. Для появления точек на графике несколько раз откройте `/health` или `/api/v1/fighters/`, затем подождите 15–30 секунд. [Пример скриншота дашборда](monitoring/grafana-dashboard.jpg).
 
 Проверка вручную: `/metrics` должен содержать `http_requests_total`, а в Prometheus запрос `up{job="python-service"}` должен возвращать `1`. `/health` возвращает `status`, `components.api.status` и `components.api.details`; `/info` возвращает `build.name`, `build.version` и список `developers`. `/health` и `/info` видны в Swagger UI; `/metrics` открывайте по прямому адресу.
 
-Для просмотра состояния контейнеров выполните `docker compose ps`, для остановки — `docker compose down`. Данные Prometheus и Grafana сохраняются в Docker volumes.
+Для просмотра состояния контейнеров выполните `docker compose ps`, для остановки — `docker compose down`. Данные PostgreSQL, Prometheus и Grafana сохраняются в томах Docker.
+
+## Проверка записи в PostgreSQL
+
+1. Откройте PowerShell в папке проекта с `docker-compose.yaml` и запустите PostgreSQL с профилем приложения `dev`:
+
+   ```powershell
+   $env:ENVIRONMENT = "dev"
+   docker compose up -d postgres
+   docker compose exec postgres pg_isready -h 127.0.0.1 -U admin -d fighters_db
+   ```
+
+   Когда проверка покажет `accepting connections`, запустите API:
+
+   ```powershell
+   docker compose up -d --build python-service
+   ```
+
+2. В [Swagger UI](http://127.0.0.1:8000/docs) выполните `POST /api/v1/fighters/` с [примером JSON из раздела Swagger](#2-создать-запись). Убедитесь, что ответ имеет статус `201 Created`, и запишите полученный `id`.
+
+3. Прочитайте запись напрямую из PostgreSQL через `psql` внутри контейнера. Замените `42` на `id` из ответа:
+
+   ```powershell
+   docker compose exec postgres psql -U admin -d fighters_db -c "SELECT * FROM public.fighters WHERE id = 42;"
+   ```
+
+   Запрос должен вернуть одну строку с теми же значениями, что и ответ API. Для проверки сохранения после перезапуска выполните `docker compose restart python-service` и повторите `SELECT`.
+
+4. Чтобы проверить остальные операции, выполните `PUT /api/v1/fighters/{fighter_id}` для той же записи с [примером обновления](#3-обновить-запись). Повторите `SELECT` и проверьте новое название и массу. После `DELETE /api/v1/fighters/{fighter_id}` тот же запрос должен вернуть `0 rows`, а повторный `GET` по этому `id` — `404 Not Found`.
+
+Для проверки через DBeaver или pgAdmin используйте хост `127.0.0.1`, порт `5432`, базу `fighters_db`, пользователя `admin` и пароль PostgreSQL из `POSTGRES_PASSWORD` в `docker-compose.yaml`. Откройте SQL-редактор для базы `fighters_db` и выполните тот же `SELECT`. Для отчёта приложите в описание PR скриншот результата после `POST` или `PUT`, где видны запрос, `id` и значения записи.
 
 ## Свойства истребителя
 
@@ -75,7 +107,7 @@ docker compose up -d --build
 
 При создании и обновлении обязательны все шесть свойств, кроме `id`. Идентификатор передавать в JSON нельзя: при создании он назначается автоматически, а при обновлении берётся из адреса запроса и сохраняется. Дополнительные поля запрещены. Значения `NaN` и бесконечности не допускаются.
 
-Пример существующего объекта с `id=1`:
+Пример объекта с `id=1`:
 
 ```json
 {
@@ -114,9 +146,9 @@ docker compose up -d --build
 
 ### 1. Получить каталог или отдельную запись
 
-Выполните `GET /api/v1/fighters/`. Сразу после запуска он возвращает массив из трёх начальных объектов.
+Выполните `GET /api/v1/fighters/`. Он возвращает записи из PostgreSQL. Если таблица пуста, ответом будет `[]`.
 
-Чтобы получить только F-16, выберите `GET /api/v1/fighters/{fighter_id}` и введите `1` в поле `fighter_id`. Ответ содержит поля объекта из примера выше и объект `links`.
+Чтобы получить отдельную запись, выберите `GET /api/v1/fighters/{fighter_id}` и введите её `id`. Ответ содержит характеристики и объект `links`.
 
 ### 2. Создать запись
 
@@ -133,7 +165,7 @@ docker compose up -d --build
 }
 ```
 
-Ожидается `201 Created` и объект с теми же характеристиками, новым `id` и локализованным `message`. Если после запуска ещё не создавались записи, его идентификатор — `4`. Сохраните фактически полученный `id` для следующих действий. В пределах одного запуска идентификаторы назначаются последовательно и после удаления повторно не используются.
+Ожидается `201 Created` и объект с теми же характеристиками, новым `id` и локализованным `message`. Сохраните полученный `id` для следующих действий.
 
 ### 3. Обновить запись
 
