@@ -13,3 +13,6 @@ typing-inspection==0.4.4
 typing_extensions==4.16.0
 uvicorn==0.54.0
 prometheus-fastapi-instrumentator==8.1.0
+pydantic-settings
+sqlalchemy[asyncio]
+asyncpg

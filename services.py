@@ -1,5 +1,5 @@
 from itertools import count
-from models import FighterInput, FighterModel, FighterUpdate
+from schemas import FighterInput, FighterModel, FighterUpdate
 
 
 fighters: dict[int, FighterModel] = {

@@ -1,14 +1,17 @@
 from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from db_depends import get_async_db
 from headers import get_language
-from models import FighterInput, FighterModel, FighterMutation, FighterResource, FighterUpdate
-from services import FighterService
+from schemas import FighterInput, FighterModel, FighterMutation, FighterResource, FighterUpdate
+# from services import FighterService
 from translations import TRANSLATIONS
+from sqlalchemy.ext.asyncio import AsyncSession
+import repository 
 
 router = APIRouter(prefix="/api/v1/fighters", tags=["fighters"])
-service = FighterService()
+# service = FighterService()
 Language = Annotated[str, Depends(get_language)]
-
+DbSession = Annotated[AsyncSession, Depends(get_async_db)]
 
 def require_fighter(fighter: FighterModel | None, language: str) -> FighterModel:
     if fighter is None:
@@ -37,27 +40,62 @@ def resource(fighter: FighterModel, request: Request, language: str) -> FighterR
 
 
 @router.get("/")
-def get_fighters(request: Request, language: Language) -> list[FighterResource]:
-    return [resource(fighter, request, language) for fighter in service.read()]
+async def get_fighters(
+        request: Request, 
+        language: Language, 
+        db: DbSession
+    ) -> list[FighterResource]:
+    fighters = await repository.list_fighters(db)
+    return [resource(fighter, request, language) for fighter in fighters]
 
 
 @router.get("/{fighter_id}")
-def get_fighter(fighter_id: int, request: Request, language: Language) -> FighterResource:
-    return resource(require_fighter(service.read(fighter_id), language), request, language)
+async def get_fighter(
+    fighter_id: int, 
+    request: Request, 
+    language: Language,
+    db: DbSession
+) -> FighterResource:
+    fighter = require_fighter(await repository.get_fighter(db, fighter_id), language)
+    return resource(fighter, request, language)
 
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
-def create_fighter(fighter: FighterInput, language: Language) -> FighterMutation:
-    return FighterMutation(**service.create(fighter).model_dump(), message=TRANSLATIONS[language]["created"])
+async def create_fighter(
+    fighter: FighterInput, 
+    language: Language,
+    db: DbSession
+) -> FighterMutation:
+    created = await repository.create_fighter(db, fighter)
+    return FighterMutation(
+        **created.model_dump(), 
+        message=TRANSLATIONS[language]["created"]
+    )
 
 
 @router.put("/{fighter_id}")
-def update_fighter(fighter_id: int, fighter: FighterUpdate, language: Language) -> FighterMutation:
-    updated = require_fighter(service.update(fighter_id, fighter), language)
-    return FighterMutation(**updated.model_dump(), message=TRANSLATIONS[language]["updated"])
-
+async def update_fighter(
+    fighter_id: int, 
+    fighter: FighterUpdate, 
+    language: Language,
+    db: DbSession
+) -> FighterMutation:
+    updated = require_fighter(
+        await repository.update_fighter(db, fighter_id, fighter), language
+    )
+    return FighterMutation(
+        **updated.model_dump(),
+        message=TRANSLATIONS[language]["updated"],
+    )
 
 @router.delete("/{fighter_id}")
-def delete_fighter(fighter_id: int, language: Language) -> FighterMutation:
-    deleted = require_fighter(service.delete(fighter_id), language)
-    return FighterMutation(**deleted.model_dump(), message=TRANSLATIONS[language]["deleted"])
+async def delete_fighter(
+    fighter_id: int, 
+    language: Language,
+    db: DbSession
+) -> FighterMutation:
+    deleted = require_fighter(await repository.delete_fighter(db, fighter_id), language)
+    return FighterMutation(
+        **deleted.model_dump(),
+        message=TRANSLATIONS[language]["deleted"],
+    )
